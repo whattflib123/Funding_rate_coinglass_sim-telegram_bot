@@ -53,6 +53,10 @@ python3 src/funding_alert.py --out assets/runtime_real_multi_8h.png
 
 ### 啟用通知（最新 funding < 0 才送）
 
+判讀說明：
+- 當資金費率為負時，通常表示市場追空情緒變大。
+- 此時做空需要更小心，並可留意可能的反彈與做多機會。
+
 ```bash
 python3 src/funding_alert.py --notify --out assets/runtime_real_multi_8h.png
 ```
@@ -70,28 +74,14 @@ CRON_TZ=UTC
 
 ![runtime chart](assets/runtime_real_multi_8h.png)
 
-### 2) 實際終端輸出（節錄）
-
-來源檔案：`assets/run_output.txt`
+### 2) 實際 Telegram 通知訊息（範例）
 
 ```text
-BTCUSDT funding history (8h, UTC) - REAL (Binance+Bybit+OKX, OI-weighted where available)
-timestamp (UTC)     close        funding_rate     percent
-2026-02-10 00:00      68882.10   -0.00002502    -0.00250%
-2026-02-10 08:00      69251.50   -0.00002666    -0.00267%
-...
-2026-03-02 00:00      66541.30   -0.00000036    -0.00004%
+⚠️ BTCUSDT 資金費率警報
+🔻 目前資金費率為負，請留意市場偏空壓力與倉位風險。
+🧠 交易邏輯：追空情緒升溫，做空需更謹慎，可留意反彈做多機會。
+🕒 時間 (UTC): 2026-03-02 00:00
+💸 資金費率: -0.00000036 (-0.00004%)
 
-PNG saved to: assets/runtime_real_multi_8h.png
-```
-
-## 上傳 GitHub
-
-```bash
-git init
-git add .
-git commit -m "Initial commit: funding rate telegram alert"
-git branch -M main
-git remote add origin <your-repo-url>
-git push -u origin main
+📊 BTCUSDT 資金費率圖表（8 小時）
 ```

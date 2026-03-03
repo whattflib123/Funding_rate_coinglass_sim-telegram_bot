@@ -426,20 +426,11 @@ def default_utc_range() -> tuple[datetime, datetime]:
 def send_telegram_alert(
     bot_token: str, chat_id: str, message: str, image_path: str, timeout_sec: int = 20
 ) -> None:
-    send_message_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    msg_resp = requests.post(
-        send_message_url, data={"chat_id": chat_id, "text": message}, timeout=timeout_sec
-    )
-    msg_resp.raise_for_status()
-    msg_payload = msg_resp.json()
-    if not msg_payload.get("ok"):
-        raise RuntimeError(f"Telegram sendMessage failed: {msg_payload}")
-
     send_photo_url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
     with open(image_path, "rb") as image_file:
         photo_resp = requests.post(
             send_photo_url,
-            data={"chat_id": chat_id, "caption": "BTCUSDT funding chart"},
+            data={"chat_id": chat_id, "caption": f"{message}\n\n📊 BTCUSDT 資金費率圖表（8 小時）"},
             files={"photo": image_file},
             timeout=timeout_sec,
         )
@@ -505,10 +496,11 @@ def main() -> int:
                 print("Warning: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID missing in .env; skip notify.")
             else:
                 message = (
-                    "BTCUSDT funding alert (< 0)\n"
-                    f"Time (UTC): {latest['timestamp']:%Y-%m-%d %H:%M}\n"
-                    f"Funding: {latest_rate:+.8f} ({latest_rate * 100:+.5f}%)\n"
-                    f"Source: {mode_label}"
+                    "⚠️ BTCUSDT 資金費率警報\n"
+                    "🔻 目前資金費率為負，請留意市場偏空壓力與倉位風險。\n"
+                    "🧠 交易邏輯：追空情緒升溫，做空需更謹慎，可留意反彈做多機會。\n"
+                    f"🕒 時間 (UTC): {latest['timestamp']:%Y-%m-%d %H:%M}\n"
+                    f"💸 資金費率: {latest_rate:+.8f} ({latest_rate * 100:+.5f}%)"
                 )
                 try:
                     send_telegram_alert(bot_token, chat_id, message, args.out)

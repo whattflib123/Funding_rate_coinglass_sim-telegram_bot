@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.env
+*.log
+assets/runtime_*.png
+assets/*.tmp

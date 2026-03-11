@@ -177,6 +177,24 @@ def fetch_binance_oi_usd() -> Optional[float]:
     return float(payload[-1]["sumOpenInterestValue"])
 
 
+def fetch_binance_oi_history_4h(start: datetime, end: datetime) -> Dict[datetime, float]:
+    payload = fetch_json(
+        "https://fapi.binance.com/futures/data/openInterestHist",
+        {
+            "symbol": "BTCUSDT",
+            "period": "4h",
+            "startTime": int(start.timestamp() * 1000),
+            "endTime": int((end + FOUR_HOURS).timestamp() * 1000) - 1,
+            "limit": 500,
+        },
+    )
+    out: Dict[datetime, float] = {}
+    for item in payload or []:
+        ts = normalize_4h_bucket(datetime.fromtimestamp(int(item["timestamp"]) / 1000, tz=UTC))
+        out[ts] = float(item["sumOpenInterestValue"])
+    return out
+
+
 def fetch_bybit_oi_usd() -> Optional[float]:
     oi_payload = fetch_json(
         "https://api.bybit.com/v5/market/open-interest",
@@ -311,6 +329,7 @@ def merge_history(
     funding_series: Dict[datetime, float],
     spot_cvd_rows: List[Dict[str, Any]],
     perp_cvd_rows: List[Dict[str, Any]],
+    oi_history: Dict[datetime, float],
 ) -> List[Dict[str, Any]]:
     spot_by_ts = {row["timestamp"]: row for row in spot_cvd_rows}
     perp_by_ts = {row["timestamp"]: row for row in perp_cvd_rows}
@@ -333,6 +352,7 @@ def merge_history(
                 "perp_cvd": None if perp_row is None else perp_row["cvd_notional"],
                 "spot_delta": None if spot_row is None else spot_row["delta_notional"],
                 "perp_delta": None if perp_row is None else perp_row["delta_notional"],
+                "oi_usd": oi_history.get(candle.timestamp),
             }
         )
     return merged
@@ -437,11 +457,14 @@ def plot_history(rows: List[Dict[str, Any]], out_path: str) -> None:
     funding_colors = ["#18a058" if value >= 0 else "#d03050" for value in funding_pct]
     has_spot_cvd = any(row["spot_cvd"] is not None for row in rows)
     has_perp_cvd = any(row["perp_cvd"] is not None for row in rows)
-    axes_count = 2 + int(has_spot_cvd) + int(has_perp_cvd)
+    has_oi = any(row.get("oi_usd") is not None for row in rows)
+    axes_count = 2 + int(has_spot_cvd) + int(has_perp_cvd) + int(has_oi)
     height_ratios = [2.2, 1.0]
     if has_spot_cvd:
         height_ratios.append(1.0)
     if has_perp_cvd:
+        height_ratios.append(1.0)
+    if has_oi:
         height_ratios.append(1.0)
     fig, axes = plt.subplots(
         axes_count,
@@ -498,6 +521,7 @@ def plot_history(rows: List[Dict[str, Any]], out_path: str) -> None:
         target_ax = ax_spot
     if has_perp_cvd:
         ax_perp = remaining_axes[next_ax_index]
+        next_ax_index += 1
         perp_times = [row["timestamp"] for row in rows if row["perp_cvd"] is not None]
         perp_values = [row["perp_cvd"] for row in rows if row["perp_cvd"] is not None]
         ax_perp.set_facecolor("#fffdf8")
@@ -507,6 +531,16 @@ def plot_history(rows: List[Dict[str, Any]], out_path: str) -> None:
         ax_perp.grid(axis="y", alpha=0.18)
         ax_perp.legend(handles=[perp_line], loc="upper left", frameon=False)
         target_ax = ax_perp
+    if has_oi:
+        ax_oi = remaining_axes[next_ax_index]
+        oi_times = [row["timestamp"] for row in rows if row.get("oi_usd") is not None]
+        oi_values = [row["oi_usd"] for row in rows if row.get("oi_usd") is not None]
+        ax_oi.set_facecolor("#fffdf8")
+        oi_line = ax_oi.plot(oi_times, oi_values, color="#7c3aed", linewidth=2.0, label="OI (USD)")[0]
+        ax_oi.set_ylabel("OI (USD)")
+        ax_oi.grid(axis="y", alpha=0.18)
+        ax_oi.legend(handles=[oi_line], loc="upper left", frameon=False)
+        target_ax = ax_oi
 
     target_ax.xaxis.set_major_formatter(mdates.DateFormatter("%m-%d %H:%M", tz=UTC))
     target_ax.xaxis.set_major_locator(mdates.AutoDateLocator(maxticks=10))
@@ -545,6 +579,7 @@ def build_message(rows: List[Dict[str, Any]]) -> str:
     ]
     has_spot_cvd = any(row["spot_cvd"] is not None for row in rows)
     has_perp_cvd = any(row["perp_cvd"] is not None for row in rows)
+    has_oi = any(row.get("oi_usd") is not None for row in rows)
     if has_spot_cvd:
         spot_change = compute_recent_change(rows, "spot_cvd")
         latest_spot = next(row["spot_cvd"] for row in reversed(rows) if row["spot_cvd"] is not None)
@@ -559,6 +594,13 @@ def build_message(rows: List[Dict[str, Any]]) -> str:
             f"{trend_emoji(perp_change)} 合約近4小時 CVD: {trend_text(perp_change)} ({format_chinese_amount(perp_change)} USDT)\n"
         )
         message_lines.append(f"合約最新 CVD: {format_chinese_amount(latest_perp)} USDT\n")
+    if has_oi:
+        oi_change = compute_recent_change(rows, "oi_usd")
+        latest_oi = next(row["oi_usd"] for row in reversed(rows) if row.get("oi_usd") is not None)
+        message_lines.append(
+            f"{funding_emoji(oi_change)} OI近4小時變化: {trend_text(oi_change)} ({format_chinese_amount(oi_change)} USDT)\n"
+        )
+        message_lines.append(f"最新 OI: {format_chinese_amount(latest_oi)} USDT\n")
     if has_spot_cvd and has_perp_cvd:
         message_lines.append(f"{build_interpretation(compute_recent_change(rows, 'spot_cvd'), compute_recent_change(rows, 'perp_cvd'))}\n")
     return "".join(message_lines)
@@ -581,13 +623,16 @@ def build_real_history(start: datetime, end: datetime) -> List[Dict[str, Any]]:
         "okx": safe_fetch("okx OI", fetch_okx_oi_usd),
     }
     combined_funding = combine_funding_by_timestamp(funding_by_exchange, oi_usd_by_exchange)
+    oi_history = safe_fetch("binance OI history", lambda: fetch_binance_oi_history_4h(start, end))
+    if not isinstance(oi_history, dict):
+        oi_history = {}
 
     spot_klines = fetch_klines("BTCUSDT", "https://api.binance.com", "/api/v3/klines", start, end)
     perp_klines = fetch_klines("BTCUSDT", "https://fapi.binance.com", "/fapi/v1/klines", start, end)
 
     spot_cvd_rows = compute_cvd_rows(spot_klines)
     perp_cvd_rows = compute_cvd_rows(perp_klines)
-    return merge_history(spot_klines, combined_funding, spot_cvd_rows, perp_cvd_rows)
+    return merge_history(spot_klines, combined_funding, spot_cvd_rows, perp_cvd_rows, oi_history)
 
 
 def main() -> int:

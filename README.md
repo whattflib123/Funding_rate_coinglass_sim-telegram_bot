@@ -7,6 +7,7 @@
 - 上方 K 線（綠漲紅跌）
 - 下方資金費率柱狀圖（正綠負紅）
 - 下方另外分開顯示 現貨(spot) CVD 與 Perp CVD
+- 最下方另外顯示 Binance Perp OI
 - 可透過 Telegram 發送「文字 + 圖片」
 
 ## 專案結構
@@ -57,6 +58,7 @@ python3 src/funding_alert.py --out assets/runtime_funding_cvd_4h.png
 - 多交易所 Funding
 - Binance Spot CVD
 - Binance Perp CVD
+- Binance Perp OI
 
 ### 啟用通知（每次執行都送）
 
@@ -64,6 +66,7 @@ python3 src/funding_alert.py --out assets/runtime_funding_cvd_4h.png
 - Funding 過高正值：代表偏多擁擠，可留意做空門檻
 - Funding 過低負值：代表偏空擁擠，可留意做多門檻
 - Spot / Perp CVD 可輔助觀察現貨與合約是否同步，或是否出現背離，可藉此判斷上漲/下跌是基於哪方力量
+- OI 可輔助觀察槓桿倉位是否同步擴張或收縮
 
 ```bash
 python3 src/funding_alert.py --notify --out assets/runtime_funding_cvd_4h.png
@@ -100,6 +103,8 @@ BTCUSDT Funding + CVD 告警通知
 🔴 合約近4小時 CVD: 走弱 (-1.4千萬 USDT)
 現貨最新 CVD: +413.9萬 USDT
 合約最新 CVD: +8.8億 USDT
+📈 OI近4小時變化: 走強 (+2,430.0萬 USDT)
+最新 OI: +18.6億 USDT
 告警解讀: 現貨偏多、合約偏空，盤面出現背離，留意價格可能重新定價。
 ```
 
@@ -110,3 +115,4 @@ BTCUSDT Funding + CVD 告警通知
   - `< -0.005%`：視為已超過做多門檻
   - 其餘：未達做多 / 做空門檻
 - CVD 目前使用 Binance `4h kline` 內的 `quote volume` 與 `taker buy quote volume` 估算，不是逐筆成交版 CVD。
+- OI 目前使用 Binance `openInterestHist` 的 `4h` 歷史資料，單位為 `USD notional`。
